@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shirt Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Bebas+Neue&family=Pacifico&family=Permanent+Marker&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1b2438; --paper:#e3e8ee; --panel:#ffffff; --line:#c9d1dc;
+  --tape:#f3c02f; --muted:#5d6980;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;background:var(--paper);color:var(--ink)}
+header{padding:14px 22px;background:var(--ink);color:#fff;display:flex;align-items:center;gap:12px}
+header h1{font-size:20px;margin:0;font-weight:800}
+header span{color:var(--tape);font-size:14px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;padding:18px;max-width:1100px;margin:0 auto}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:10px;display:flex;justify-content:center;padding:12px}
+canvas{max-width:100%;height:auto;touch-action:none;cursor:grab}
+aside{display:flex;flex-direction:column;gap:14px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.box h2{font-size:15px;margin:0 0 10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.swatch{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);cursor:pointer;padding:0}
+.swatch[aria-pressed=true]{outline:3px solid var(--tape);outline-offset:2px}
+input[type=text],select{flex:1;min-width:0;padding:8px;border:1px solid var(--line);border-radius:6px;font:inherit}
+input[type=range]{flex:1}
+input[type=color]{width:38px;height:34px;border:1px solid var(--line);border-radius:6px;padding:2px;background:#fff}
+label{font-size:13px;color:var(--muted);min-width:62px}
+button{font:inherit;padding:8px 12px;border-radius:6px;border:1px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
+button:hover{background:var(--paper)}
+button.primary{background:var(--tape);font-weight:600}
+button.danger{border-color:#b3261e;color:#b3261e}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--tape);outline-offset:1px}
+.stickers button{font-size:20px;padding:4px 9px}
+#editor[hidden]{display:none}
+.hint{font-size:13px;color:var(--muted);margin:0}
+.tabs{display:flex;gap:4px;margin-bottom:10px}
+.tabs button{flex:1;padding:7px 4px;font-size:13px;border-color:var(--line)}
+.tabs button[aria-selected=true]{background:var(--ink);color:#fff;border-color:var(--ink)}
+.chips button{padding:3px 9px;font-size:12px;border-radius:99px;border-color:var(--line);color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-height:260px;overflow:auto}
+.grid button{aspect-ratio:1;padding:4px;border-color:var(--line);background:#f6f8fa;display:flex;align-items:center;justify-content:center}
+.grid img{max-width:100%;max-height:100%;object-fit:contain;pointer-events:none}
+#status{margin-top:8px;min-height:18px}
+@media (max-width:820px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>Shirt Studio</h1><span>Design a shirt, download the PNG</span></header>
+<main>
+  <section class="stage"><canvas id="cv" width="600" height="700" aria-label="Shirt design preview"></canvas></section>
+  <aside>
+    <div class="box">
+      <h2>Shirt color</h2>
+      <div class="row" id="swatches"></div>
+    </div>
+    <div class="box">
+      <h2>Add to shirt</h2>
+      <div class="row">
+        <input type="text" id="newText" placeholder="Type your text" maxlength="40">
+        <button class="primary" id="addText">Add text</button>
+      </div>
+      <div class="row" id="shapes"></div>
+    </div>
+    <div class="box">
+      <h2>Sticker &amp; image library</h2>
+      <div class="tabs" id="tabs">
+        <button data-tab="stickers" aria-selected="true">Stickers</button>
+        <button data-tab="icons" aria-selected="false">Icons</button>
+        <button data-tab="photos" aria-selected="false">Photos</button>
+        <button data-tab="upload" aria-selected="false">Mine</button>
+      </div>
+      <div id="searchBar">
+        <div class="row"><input type="text" id="q" placeholder="Search: cat, fire, heart..." aria-label="Search"><input type="color" id="iconColor" value="#111111" title="Icon color" hidden></div>
+        <div class="row chips" id="chips"></div>
+      </div>
+      <div id="uploadBar" hidden>
+        <input type="file" id="file" accept="image/*" multiple hidden>
+        <div class="row"><button class="primary" id="pick">Upload images</button></div>
+        <p class="hint" style="margin-bottom:8px">Or drop an image on the shirt, or paste with Ctrl+V.</p>
+      </div>
+      <div class="grid" id="grid"></div>
+      <p class="hint" id="status"></p>
+    </div>
+    <div class="box" id="editor" hidden>
+      <h2>Edit selected</h2>
+      <div class="row" id="textRow"><label for="eText">Text</label><input type="text" id="eText"></div>
+      <div class="row" id="fontRow"><label for="eFont">Font</label>
+        <select id="eFont">
+          <option value="'Bricolage Grotesque'">Bricolage</option>
+          <option value="'Bebas Neue'">Bebas Neue</option>
+          <option value="'Pacifico'">Pacifico</option>
+          <option value="'Permanent Marker'">Permanent Marker</option>
+          <option value="'Playfair Display'">Playfair</option>
+        </select></div>
+      <div class="row" id="colorRow"><label for="eColor">Color</label><input type="color" id="eColor"></div>
+      <div class="row"><label for="eSize">Size</label><input type="range" id="eSize" min="16" max="260"></div>
+      <div class="row"><label for="eRot">Rotate</label><input type="range" id="eRot" min="-180" max="180"></div>
+      <div class="row" id="imgRow"><label for="eAlpha">Opacity</label><input type="range" id="eAlpha" min="10" max="100"><button id="flip">Flip</button></div>
+      <p class="hint" id="credit" style="margin-bottom:8px"></p>
+      <div class="row">
+        <button id="front">Bring to front</button>
+        <button id="del" class="danger">Delete</button>
+      </div>
+    </div>
+    <div class="box">
+      <button class="primary" id="save" style="width:100%">Download PNG</button>
+      <p class="hint" style="margin-top:8px">Drag items on the shirt to move them. Tap an item to edit it.</p>
+    </div>
+  </aside>
+</main>
+
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const COLORS = ['#ffffff','#111111','#1f3a8a','#b3261e','#2e7d4f','#f3c02f','#e8a0bf','#8a8f98'];
+const SHAPES = ['circle','square','triangle','star'];
+const SHIRT = new Path2D('M205 40 Q300 105 395 40 L545 105 L600 235 L505 280 L462 225 L462 650 Q462 672 440 672 L160 672 Q138 672 138 650 L138 225 L95 280 L0 235 L55 105 Z');
+
+let shirtColor = COLORS[0];
+let layers = [];
+let sel = null;
+let drag = null;
+
+/* ---------- drawing ---------- */
+function drawShirt(){
+  ctx.fillStyle = shirtColor;
+  ctx.fill(SHIRT);
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.stroke(SHIRT);
+  ctx.beginPath(); ctx.moveTo(205,40); ctx.quadraticCurveTo(300,150,395,40);
+  ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.stroke();
+}
+function setFont(l){ ctx.font = (l.type==='emoji' ? '' : '') + l.size + 'px ' + (l.font || 'sans-serif'); }
+function bounds(l){
+  if(l.type==='text'||l.type==='emoji'){ setFont(l); return {w: ctx.measureText(l.text).width, h: l.size}; }
+  return {w:l.size, h:l.type==='image'?l.size*l.ar:l.size};
+}
+function drawLayer(l){
+  ctx.save();
+  ctx.translate(l.x,l.y); ctx.rotate(l.rot*Math.PI/180);
+  ctx.fillStyle = l.color;
+  if(l.type==='image'){
+    ctx.globalAlpha=l.alpha; ctx.scale(l.flip,1);
+    ctx.drawImage(l.img,-l.size/2,-l.size*l.ar/2,l.size,l.size*l.ar);
+  } else if(l.type==='text'||l.type==='emoji'){
+    setFont(l); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(l.text,0,0);
+  } else {
+    const r = l.size/2; ctx.beginPath();
+    if(l.shape==='circle') ctx.arc(0,0,r,0,Math.PI*2);
+    else if(l.shape==='square') ctx.rect(-r,-r,l.size,l.size);
+    else if(l.shape==='triangle'){ ctx.moveTo(0,-r); ctx.lineTo(r,r); ctx.lineTo(-r,r); ctx.closePath(); }
+    else { for(let i=0;i<10;i++){ const a=-Math.PI/2+i*Math.PI/5, rr=i%2?r*.45:r; ctx[i?'lineTo':'moveTo'](Math.cos(a)*rr,Math.sin(a)*rr);} ctx.closePath(); }
+    ctx.fill();
+  }
+  ctx.restore();
+}
+function render(withUI=true){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  drawShirt();
+  layers.forEach(drawLayer);
+  if(withUI && sel){
+    const b = bounds(sel);
+    ctx.save(); ctx.translate(sel.x,sel.y); ctx.rotate(sel.rot*Math.PI/180);
+    ctx.setLineDash([6,4]); ctx.lineWidth=2; ctx.strokeStyle='#1b2438';
+    ctx.strokeRect(-b.w/2-6,-b.h/2-6,b.w+12,b.h+12); ctx.restore();
+  }
+}
+
+/* ---------- layers ---------- */
+function addLayer(l){
+  layers.push(Object.assign({x:300,y:300,rot:0,size:60,color:'#111111',font:"'Bricolage Grotesque'"}, l));
+  select(layers[layers.length-1]);
+}
+function select(l){
+  sel = l;
+  const ed = document.getElementById('editor');
+  ed.hidden = !l;
+  if(l){
+    const im=l.type==='image';
+    $('textRow').hidden = l.type==='shape'||im;
+    $('fontRow').hidden = l.type!=='text';
+    $('colorRow').hidden = im; $('imgRow').hidden = !im;
+    eSize.max = im?520:260; eAlpha.value = (l.alpha||1)*100;
+    $('credit').textContent = l.credit ? 'Credit: '+l.credit : '';
+    eText.value = l.text||''; eFont.value = l.font; eColor.value = l.color;
+    eSize.value = l.size; eRot.value = l.rot;
+  }
+  render();
+}
+function hit(x,y){
+  for(let i=layers.length-1;i>=0;i--){
+    const l=layers[i], b=bounds(l), a=-l.rot*Math.PI/180;
+    const dx=x-l.x, dy=y-l.y;
+    const rx=dx*Math.cos(a)-dy*Math.sin(a), ry=dx*Math.sin(a)+dy*Math.cos(a);
+    if(Math.abs(rx)<=b.w/2+8 && Math.abs(ry)<=b.h/2+8) return l;
+  }
+  return null;
+}
+
+/* ---------- pointer ---------- */
+function pos(e){
+  const r=cv.getBoundingClientRect();
+  return {x:(e.clientX-r.left)*cv.width/r.width, y:(e.clientY-r.top)*cv.height/r.height};
+}
+cv.addEventListener('pointerdown',e=>{
+  const p=pos(e), l=hit(p.x,p.y);
+  select(l);
+  if(l){ drag={dx:p.x-l.x, dy:p.y-l.y}; cv.setPointerCapture(e.pointerId); cv.style.cursor='grabbing'; }
+});
+cv.addEventListener('pointermove',e=>{
+  if(!drag||!sel) return;
+  const p=pos(e); sel.x=p.x-drag.dx; sel.y=p.y-drag.dy; render();
+});
+cv.addEventListener('pointerup',()=>{drag=null; cv.style.cursor='grab';});
+
+/* ---------- controls ---------- */
+const $=id=>document.getElementById(id);
+const eAlpha=$('eAlpha');
+const eText=$('eText'), eFont=$('eFont'), eColor=$('eColor'), eSize=$('eSize'), eRot=$('eRot');
+
+COLORS.forEach(c=>{
+  const b=document.createElement('button');
+  b.className='swatch'; b.style.background=c; b.setAttribute('aria-label','Shirt color '+c);
+  b.setAttribute('aria-pressed', c===shirtColor);
+  b.onclick=()=>{ shirtColor=c; [...$('swatches').children].forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); };
+  $('swatches').appendChild(b);
+});
+SHAPES.forEach(s=>{
+  const b=document.createElement('button'); b.textContent=s;
+  b.onclick=()=>addLayer({type:'shape',shape:s,size:120,color:'#e4572e'});
+  $('shapes').appendChild(b);
+});
+$('addText').onclick=()=>{
+  const t=$('newText').value.trim()||'Your text';
+  addLayer({type:'text',text:t,size:64,color:shirtColor==='#111111'?'#ffffff':'#111111'});
+  $('newText').value='';
+};
+$('newText').addEventListener('keydown',e=>{ if(e.key==='Enter') $('addText').click(); });
+
+eText.oninput=()=>{ if(sel){ sel.text=eText.value; render(); } };
+eFont.onchange=()=>{ if(sel){ document.fonts.load('40px '+eFont.value).then(()=>{ sel.font=eFont.value; render(); }); } };
+eColor.oninput=()=>{ if(sel){ sel.color=eColor.value; render(); } };
+eSize.oninput=()=>{ if(sel){ sel.size=+eSize.value; render(); } };
+eRot.oninput=()=>{ if(sel){ sel.rot=+eRot.value; render(); } };
+$('front').onclick=()=>{ if(sel){ layers=layers.filter(l=>l!==sel); layers.push(sel); render(); } };
+$('del').onclick=()=>{ if(sel){ layers=layers.filter(l=>l!==sel); select(null); } };
+document.addEventListener('keydown',e=>{
+  if((e.key==='Delete'||e.key==='Backspace') && sel && !/INPUT|SELECT/.test(document.activeElement.tagName)) $('del').click();
+});
+$('save').onclick=()=>{
+  render(false);
+  const a=document.createElement('a'); a.download='my-shirt-design.png'; a.href=cv.toDataURL('image/png'); a.click();
+  render();
+  const cr=layers.filter(l=>l.credit).map(l=>l.credit);
+  if(cr.length) status('Credits for your photos: '+cr.join('; '));
+};
+
+/* ---------- image library ---------- */
+const SRC={stickers:'fluent-emoji-flat,noto,openmoji,twemoji',icons:'mdi,tabler,ph,lucide'};
+const CHIPS=['heart','cat','fire','music','food','star','sport','flower','skull','rocket'];
+let tab='stickers', uploads=[], timer, reqId=0;
+const status=t=>{$('status').textContent=t;};
+const loadImage=src=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=src;});
+
+async function addImageFrom(url,credit){
+  status('Adding image...');
+  try{
+    const r=await fetch(url); if(!r.ok) throw 0;
+    const img=await loadImage(URL.createObjectURL(await r.blob()));
+    addLayer({type:'image',img,ar:(img.naturalHeight/img.naturalWidth)||1,size:220,flip:1,alpha:1,credit});
+    status('');
+  }catch(e){ status('This image could not be loaded (its host blocked it). Try another one.'); }
+}
+function addFile(f){
+  if(!f||!f.type.startsWith('image/')) return;
+  const url=URL.createObjectURL(f); uploads.push(url);
+  addImageFrom(url,'').then(()=>{ if(tab==='upload') showUploads(); });
+}
+function thumb(src,label,onclick){
+  const b=document.createElement('button'); b.title=label||''; b.setAttribute('aria-label',label||'image');
+  const i=document.createElement('img'); i.src=src; i.loading='lazy'; i.alt=''; b.appendChild(i);
+  b.onclick=onclick; $('grid').appendChild(b);
+}
+function showUploads(){
+  $('grid').innerHTML='';
+  uploads.forEach((u,n)=>thumb(u,'My image '+(n+1),()=>addImageFrom(u,'')));
+  status(uploads.length?'':'Your uploaded images will show up here.');
+}
+async function search(){
+  if(tab==='upload') return showUploads();
+  const q=$('q').value.trim()||'heart', id=++reqId;
+  $('grid').innerHTML=''; status('Searching...');
+  try{
+    if(tab==='photos'){
+      const r=await fetch('https://api.openverse.org/v1/images/?q='+encodeURIComponent(q)+'&page_size=24&license_type=commercial&mature=false');
+      const d=await r.json(); if(id!==reqId) return;
+      d.results.forEach(x=>thumb(x.thumbnail,x.title,()=>addImageFrom(x.thumbnail,
+        (x.title||'Untitled')+' by '+(x.creator||'unknown')+' ('+(x.license||'').toUpperCase()+') via Openverse')));
+      status(d.results.length?'Free-licence photos from Openverse. Credit appears when selected.':'No photos found.');
+    } else {
+      const r=await fetch('https://api.iconify.design/search?query='+encodeURIComponent(q)+'&limit=60&prefixes='+SRC[tab]);
+      const d=await r.json(); if(id!==reqId) return;
+      const col=tab==='icons'?'&color='+encodeURIComponent($('iconColor').value):'';
+      d.icons.forEach(n=>{ const [p,name]=n.split(':'), base='https://api.iconify.design/'+p+'/'+name+'.svg?';
+        thumb(base+'height=96'+col,name,()=>addImageFrom(base+'height=600'+col,'')); });
+      status(d.icons.length?'':'Nothing found. Try another word.');
+    }
+  }catch(e){ if(id===reqId) status('Search failed. Check your internet connection.'); }
+}
+CHIPS.forEach(c=>{ const b=document.createElement('button'); b.textContent=c;
+  b.onclick=()=>{ $('q').value=c; search(); }; $('chips').appendChild(b); });
+$('q').addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(search,350); });
+$('iconColor').oninput=()=>{ clearTimeout(timer); timer=setTimeout(search,200); };
+$('tabs').addEventListener('click',e=>{
+  const t=e.target.dataset.tab; if(!t) return; tab=t;
+  [...$('tabs').children].forEach(b=>b.setAttribute('aria-selected',b===e.target));
+  $('searchBar').hidden = t==='upload'; $('uploadBar').hidden = t!=='upload';
+  $('iconColor').hidden = t!=='icons';
+  search();
+});
+$('pick').onclick=()=>$('file').click();
+$('file').onchange=e=>{ [...e.target.files].forEach(addFile); e.target.value=''; };
+cv.addEventListener('dragover',e=>e.preventDefault());
+cv.addEventListener('drop',e=>{ e.preventDefault(); [...e.dataTransfer.files].forEach(addFile); });
+document.addEventListener('paste',e=>{ [...(e.clipboardData?.files||[])].forEach(addFile); });
+eAlpha.oninput=()=>{ if(sel){ sel.alpha=eAlpha.value/100; render(); } };
+$('flip').onclick=()=>{ if(sel){ sel.flip*=-1; render(); } };
+
+/* ---------- start ---------- */
+document.fonts.ready.then(()=>{
+  addLayer({type:'text',text:'Hello',size:96,font:"'Permanent Marker'",y:280});
+});
+render(); search();
+</script>
+</body>
+</html>
